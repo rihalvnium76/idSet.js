@@ -4,7 +4,7 @@ var IdSet = (function () {
         this._size = 0;
     }
 
-    IdSet.VERSION = "0.2.0";
+    IdSet.VERSION = "0.3.0";
 
     IdSet.from = function (o) {
         if (o instanceof IdSet) {
@@ -19,6 +19,13 @@ var IdSet = (function () {
             ret.add(o);
         }
         return ret;
+    }
+
+    IdSet._wrap = function (o) {
+        if (o instanceof IdSet) {
+            return o;
+        }
+        return IdSet.from(o);
     }
 
     IdSet.prototype = {
@@ -55,10 +62,10 @@ var IdSet = (function () {
             return !this._size;
         },
         allIn: function (c) {
-            return this.intersection(c).size() === this._size;
+            return this.isSubset(c);
         },
         allNotIn: function (c) {
-            return this.intersection(c).size() === 0;
+            return this.isDisjoint(c);
         },
         forEach: function (fn, thisArg) {
             thisArg = thisArg || this;
@@ -85,7 +92,16 @@ var IdSet = (function () {
             return ret;
         },
         reduce: function (fn, initialValue) {
-            return this.toArray().reduce(fn, initialValue);
+            var ret = initialValue, direct = initialValue === void 0;
+            this.forEach(function (e) {
+                if (direct) {
+                    ret = e;
+                    direct = false;
+                } else {
+                    ret = fn.call(this, ret, e, this);
+                }
+            });
+            return ret;
         },
         every: function (fn, thisArg) {
             return this.forEach(function (e) {
@@ -99,7 +115,7 @@ var IdSet = (function () {
         },
         intersection: function (c) {
             var ret = new IdSet();
-            IdSet.from(c).forEach(function (e) {
+            IdSet._wrap(c).forEach(function (e) {
                 if (this.contains(e)) {
                     ret.add(e);
                 }
@@ -119,12 +135,12 @@ var IdSet = (function () {
                 if (!this.contains(e)) {
                     ret.add(e);
                 }
-            }, IdSet.from(c));
+            }, IdSet._wrap(c));
             return ret;
         },
         symmetricDifference: function (c) {
             var ret = new IdSet();
-            var other = IdSet.from(c);
+            var other = IdSet._wrap(c);
             this.forEach(function (e) {
                 if (!this.contains(e)) {
                     ret.add(e);
@@ -136,6 +152,23 @@ var IdSet = (function () {
                 }
             }, this);
             return ret;
+        },
+        isDisjoint: function (c) {
+            return this.intersection(c).size() === 0;
+        },
+        isSubset: function (c) {
+            return this.intersection(c).size() === this._size;
+        },
+        isStrictSubset: function (c) {
+            c = IdSet._wrap(c);
+            return this.intersection(c).size() === this._size && c.size() !== this._size;
+        },
+        isSuperset: function (c) {
+            return IdSet._wrap(c).isSubset(this);
+        },
+        isStrictSuperset: function (c) {
+            c = IdSet._wrap(c);
+            return c.isSubset(this) && c.size() !== this._size;
         },
         toArray: function () {
             var ret = [];
@@ -167,8 +200,8 @@ var IdSet = (function () {
         // keyOf-> accept -> has -> store / drop / load
         _keyOf: function (e) {
             switch (typeof e) {
-                case "string": return "S".concat(e);
-                case "number": return "N".concat(String(e));
+                case "string": return "S" + e;
+                case "number": return "N" + String(e);
                 default: return null;
             }
         },
